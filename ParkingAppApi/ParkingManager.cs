@@ -5,7 +5,7 @@
         private List<Period> periodList;
         private List<User> userList;
         private JsonFileManager<Period> periodFileManager = new JsonFileManager<Period>("periods.json");
-        private JsonFileManager<User> userFileManager = new JsonFileManager<User>("users.json");
+        private JsonFileManager<User> userFileManager = new JsonFileManager<User>("users1.json");
 
         public ParkingManager()
         {
@@ -29,7 +29,7 @@
                 Console.WriteLine("User exists");
                 return null;
             }
-            string userid = user.UserName + "_" + (userList.Count + 1).ToString();
+            string userid = user.FirstName + "_" + (userList.Count + 1).ToString();
             user.UserId = userid;
             userList.Add(user);
             userFileManager.WriteToFile(userList);
@@ -43,6 +43,17 @@
         public List<Period>? GetAllPeriodsForUser(string userid)
         {
             return periodList.Where(p=>p.UserId == userid).ToList();
+        }
+        public List<Period>? GetAllPreviousPeriodsForUser(String userid)
+        {
+            List<Period>? previousPeriodes= periodList.Where(p => p.UserId == userid && p.EndTime != null).ToList();
+            if (previousPeriodes != null)
+                return previousPeriodes;
+            else
+            {
+                Console.WriteLine($"there isn't previous Periods for {userid}");
+                return null;
+            }
         }
         public int BeginNewPeriod(string userid)
         {

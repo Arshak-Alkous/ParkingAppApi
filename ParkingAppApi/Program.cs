@@ -6,13 +6,20 @@ var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 
+builder.Services.AddCors(options =>
+{
+    options.AddPolicy("AllowAll", policy =>
+    {
+        policy.AllowAnyOrigin().AllowAnyMethod().AllowAnyHeader();
+    });
+});
 var app = builder.Build();
 if (app.Environment.IsDevelopment())
 {
     app.UseSwagger();
     app.UseSwaggerUI();
 }
-
+app.UseCors("AllowAll");
 ParkingManager parkingManager = new ParkingManager();
 
 app.MapPost("/register-user", (User user)=>
@@ -28,7 +35,7 @@ app.MapPost("/register-user", (User user)=>
         return Results.Conflict("user already exists");
     }
         
-    return Results.Ok($"User {user.UserId} registered successfully");
+    return Results.Ok(new { Message = $"User {user.UserId} registered successfully" , UserID=user.UserId});
 });
 app.MapGet("/get-user-details/{userid}", (string userid) =>
 {
@@ -42,6 +49,18 @@ app.MapGet("/get-user-details/{userid}", (string userid) =>
             Periods=periods
         });
     return Results.NotFound("user not found");
+});
+app.MapGet("/get-previous-sessions/{userid}", (string userid) => 
+{
+    List<Period>? previousPeriodes = parkingManager.GetAllPreviousPeriodsForUser(userid);
+    if (previousPeriodes != null)
+        return Results.Ok(new
+        {
+            message = $"The previous session for {userid}",
+            previousSession = previousPeriodes,
+        });
+    else return Results.NotFound($"There is no Previous sessions for this user:{userid}");
+
 });
 app.MapGet("/begin-new-period/{userid}",(string userid) =>
 {
