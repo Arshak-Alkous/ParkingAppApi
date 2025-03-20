@@ -21,15 +21,16 @@ if (app.Environment.IsDevelopment())
 }
 app.UseCors("AllowAll");
 ParkingManager parkingManager = new ParkingManager();
+app.MapGet("/favicon.ico", () => Results.NotFound());
 
 app.MapPost("/register-user", (User user)=>
 {
-    if (user == null || string.IsNullOrEmpty(user.UserName) || string.IsNullOrEmpty(user.CarPlateNumber))
+    if (user == null || string.IsNullOrEmpty(user.UserName) || string.IsNullOrEmpty(user.Licenseplate))
     {
         return Results.BadRequest("invalid user data");
     }
 
-    string? userid = parkingManager.RegisterUser(user);
+    int? userid = parkingManager.RegisterUser(user);
     if (userid == null)
     {
         return Results.Conflict("user already exists");
@@ -37,7 +38,21 @@ app.MapPost("/register-user", (User user)=>
         
     return Results.Ok(new { Message = $"User {user.UserId} registered successfully" , UserID=user.UserId});
 });
-app.MapGet("/get-user-details/{userid}", (string userid) =>
+app.MapPost("/login", (LoginRequest loginRequest) => 
+{
+    User? user = parkingManager.Login(loginRequest.UserName, loginRequest.Password);
+    
+    if (user == null) 
+    {
+        return Results.BadRequest("Invalid credentials");
+    }
+    else
+    {
+       // string fullName = user.FirstName + "," + user.LastName;
+        return Results.Ok(new { message = $"Successful login fo user: {loginRequest.UserName}", user});
+    }
+});
+app.MapGet("/user-details/", (int userid) =>
 {
     User? user = parkingManager.GetUserDetails(userid);
     List<Period>? periods=parkingManager.GetAllPeriodsForUser(userid);
@@ -50,7 +65,7 @@ app.MapGet("/get-user-details/{userid}", (string userid) =>
         });
     return Results.NotFound("user not found");
 });
-app.MapGet("/get-previous-sessions/{userid}", (string userid) => 
+app.MapGet("/previous-sessions/{userid}", (int userid) => 
 {
     List<Period>? previousPeriodes = parkingManager.GetAllPreviousPeriodsForUser(userid);
     if (previousPeriodes != null)
@@ -62,12 +77,12 @@ app.MapGet("/get-previous-sessions/{userid}", (string userid) =>
     else return Results.NotFound($"There is no Previous sessions for this user:{userid}");
 
 });
-app.MapGet("/begin-new-period/{userid}",(string userid) =>
+app.MapPost("/start-session/", (int userid) =>
 {
-    if (string.IsNullOrEmpty(userid)) 
+    /*if (string.IsNullOrEmpty(userid)) 
     {
         return Results.BadRequest($"{userid} was not found");
-    }
+    }*/
     int periodid=parkingManager.BeginNewPeriod(userid);
     return Results.Ok(new
     {
@@ -76,7 +91,7 @@ app.MapGet("/begin-new-period/{userid}",(string userid) =>
         startTime=DateTime.Now,
     });
 });
-app.MapGet("/get-present-period/{userid}", (string userid) =>
+app.MapGet("/current-session/{userid}", (int userid) =>
 {
     Period? presentPeriod=parkingManager.GetPresentPeriod(userid);
     if (presentPeriod==null)
@@ -89,10 +104,13 @@ app.MapGet("/get-present-period/{userid}", (string userid) =>
     {
         Message= $"the current Period for {userid} is:  {presentPeriod.PeriodId}," ,
         TotalHours=totalHuors,
-        TotalMinutes=totalMinutes
+        TotalMinutes=totalMinutes,
+        Start=presentPeriod.StartTime,
+        Cost=presentPeriod.PeriodCost
+
     });
 });
-app.MapGet("/end-present-period/{userid}", (string userid) =>
+app.MapGet("/end-session/{userid}", (int userid) =>
 {
     Period? endPeriod = parkingManager.EndPresentPeriod(userid);
     if (endPeriod == null)
@@ -109,12 +127,15 @@ app.MapGet("/end-present-period/{userid}", (string userid) =>
         TotalMinutes = totalMinutes
     });
 });
-app.MapGet("/get-Total-cost-for-user/{userid}", (string userid) =>
+app.MapGet("/user-balance/{userid}", (int userid) =>
 {
-    decimal cost = parkingManager.GetCostForUser(userid);
-    if (cost == 0)
+    decimal totalCost = parkingManager.GetCostForUser(userid);
+    if (totalCost == 0)
         return Results.NotFound($"User {userid} doesn't exist or no periods ended .");
-    return Results.Ok($"the cost for user {userid} is {cost}");
+    return Results.Ok(new {
+        message = $"the cost for user {userid} is {totalCost}" ,
+        balance = totalCost
+    });
 });
 
 app.MapGet("/", () => "Parking App Swagger Api!");

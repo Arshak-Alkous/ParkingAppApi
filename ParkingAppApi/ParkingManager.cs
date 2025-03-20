@@ -4,8 +4,8 @@
     {
         private List<Period> periodList;
         private List<User> userList;
-        private JsonFileManager<Period> periodFileManager = new JsonFileManager<Period>("periods.json");
-        private JsonFileManager<User> userFileManager = new JsonFileManager<User>("users1.json");
+        private JsonFileManager<Period> periodFileManager = new JsonFileManager<Period>("periods2.json");
+        private JsonFileManager<User> userFileManager = new JsonFileManager<User>("users2.json");
 
         public ParkingManager()
         {
@@ -21,7 +21,7 @@
             periodFileManager.WriteToFile(periodList);
             userFileManager.WriteToFile(userList);
         }*/
-        public string? RegisterUser(User user)
+        public int? RegisterUser(User user)
         {
             User? newuser= userList.FirstOrDefault(u => u.UserName== user.UserName);
             if (newuser != null)
@@ -29,22 +29,28 @@
                 Console.WriteLine("User exists");
                 return null;
             }
-            string userid = user.FirstName + "_" + (userList.Count + 1).ToString();
+            int userid = userList.Count + 1;
             user.UserId = userid;
             userList.Add(user);
             userFileManager.WriteToFile(userList);
             Console.WriteLine($"User Added: {userid}");
             return userid;
         }
-        public User? GetUserDetails(string userid)
+        public User? Login(string userName,string password)
+        {
+            User? user = userList.FirstOrDefault(u => u.UserName == userName);
+            if (user == null || user.Password != password) return null;
+            return user;
+        }
+        public User? GetUserDetails(int userid)
         {
             return userList.FirstOrDefault(u => u.UserId == userid);
         }
-        public List<Period>? GetAllPeriodsForUser(string userid)
+        public List<Period>? GetAllPeriodsForUser(int userid)
         {
             return periodList.Where(p=>p.UserId == userid).ToList();
         }
-        public List<Period>? GetAllPreviousPeriodsForUser(String userid)
+        public List<Period>? GetAllPreviousPeriodsForUser(int userid)
         {
             List<Period>? previousPeriodes= periodList.Where(p => p.UserId == userid && p.EndTime != null).ToList();
             if (previousPeriodes != null)
@@ -55,7 +61,7 @@
                 return null;
             }
         }
-        public int BeginNewPeriod(string userid)
+        public int BeginNewPeriod(int userid)
         {
             int periodid= periodList.Count + 1;
             Period period = new Period()
@@ -71,12 +77,13 @@
             Console.WriteLine($"period{periodid} begin for user {userid}");
             return periodid;
         }
-        public Period? GetPresentPeriod(string userid)
+        public Period? GetPresentPeriod(int userid)
         {
                 Period? presentperiod = periodList.FirstOrDefault(x => x.UserId == userid&&x.EndTime==null);
             if(presentperiod != null)
             {
                 Console.WriteLine($"The present period is {presentperiod.PeriodId} for user ({userid}) ");
+                presentperiod.PeriodCost = CalulateCostForPeriod(presentperiod.StartTime, DateTime.Now);
                 return presentperiod;
             }    
             else {
@@ -84,7 +91,7 @@
                 return null;
             }
         }
-        public Period? EndPresentPeriod(string userid) 
+        public Period? EndPresentPeriod(int userid) 
         {
             Period? presentperiod = GetPresentPeriod(userid);
             if (presentperiod != null)
@@ -103,11 +110,14 @@
                 return null;
             }
         }
-        public decimal GetCostForUser(string userid) 
+        public decimal GetCostForUser(int userid) 
         {
-            return periodList
-                .Where(p=>p.UserId==userid)
-                .Sum(p=>p.PeriodCost);
+            User? user= userList.FirstOrDefault(u => u.UserId == userid);
+            decimal totalCost= periodList
+                .Where(p => p.UserId == userid)
+                .Sum(p => p.PeriodCost);
+            if (user!=null)user.Balance = totalCost;
+            return totalCost;
         }
         private decimal CalulateCostForPeriod(DateTime start, DateTime end)
         {
