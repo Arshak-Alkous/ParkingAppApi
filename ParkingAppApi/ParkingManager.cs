@@ -94,11 +94,14 @@
         public Period? EndPresentPeriod(int userid) 
         {
             Period? presentperiod = GetPresentPeriod(userid);
+            User? user = userList.FirstOrDefault(u => u.UserId == userid);
             if (presentperiod != null)
             {
                 presentperiod.EndTime = DateTime.Now;
                 presentperiod.PeriodCost = CalulateCostForPeriod(presentperiod.StartTime, presentperiod.EndTime.Value);
-                periodFileManager.WriteToFile(periodList);
+                user.Balance += presentperiod.PeriodCost;
+                periodFileManager.WriteToFile(periodList);// for update periods2.json file with new end time and cost
+                userFileManager.WriteToFile(userList);// for update users2.json with new balance
                 var totalHuors = (presentperiod.EndTime.Value - presentperiod.StartTime).TotalHours;
                 //var totalMinutes = (presentperiod.EndTime.Value - presentperiod.StartTime).TotalMinutes;
                 Console.WriteLine($"the period {presentperiod.PeriodId} is ended for user :{userid} \n ,where cost for this period is {presentperiod.PeriodCost}and total time {totalHuors} Hours ");
@@ -113,11 +116,11 @@
         public decimal GetCostForUser(int userid) 
         {
             User? user= userList.FirstOrDefault(u => u.UserId == userid);
-            decimal totalCost= periodList
+            /*decimal totalCost= periodList
                 .Where(p => p.UserId == userid)
                 .Sum(p => p.PeriodCost);
-            if (user!=null)user.Balance = totalCost;
-            return totalCost;
+            if (user!=null)user.Balance = totalCost;*/
+            return user.Balance;
         }
         private decimal CalulateCostForPeriod(DateTime start, DateTime end)
         {
