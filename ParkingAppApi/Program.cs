@@ -1,3 +1,4 @@
+using Microsoft.AspNetCore.Mvc;
 using ParkingAppApi;
 using System.Text.Json;
 
@@ -25,7 +26,7 @@ app.MapGet("/favicon.ico", () => Results.NotFound());
 
 app.MapPost("/register-user", (User user)=>
 {
-    if (user == null || string.IsNullOrEmpty(user.UserName) || string.IsNullOrEmpty(user.Licenseplate))
+    if (user == null || string.IsNullOrEmpty(user.Username) || string.IsNullOrEmpty(user.Licenseplate))
     {
         return Results.BadRequest("invalid user data");
     }
@@ -36,7 +37,7 @@ app.MapPost("/register-user", (User user)=>
         return Results.Conflict("user already exists");
     }
         
-    return Results.Ok(new { Message = $"User {user.UserId} registered successfully" , UserID=user.UserId});
+    return Results.Ok(new { Message = $"User {user.Firstname} {user.Lastname} registered successfully" , UserID=user.UserID});
 });
 app.MapPost("/login", (LoginRequest loginRequest) => 
 {
@@ -48,26 +49,69 @@ app.MapPost("/login", (LoginRequest loginRequest) =>
     }
     else
     {
-       // string fullName = user.FirstName + "," + user.LastName;
+       // string fullName = user.Firstname + "," + user.Lastname;
         return Results.Ok(new { message = $"Successful login fo user: {loginRequest.UserName}", user});
     }
 });
-app.MapGet("/user-details/", (int userid) =>
+
+app.MapPost("/start-session", ([FromBody] int userId) =>
 {
-    User? user = parkingManager.GetUserDetails(userid);
-    List<Period>? periods=parkingManager.GetAllPeriodsForUser(userid);
-    if (user != null)
+    if (userId <= 0)
+    {
+        return Results.BadRequest(new { message = "Invalid user Id" });
+    }
+    int periodid=parkingManager.BeginNewPeriod(userId);
+    return Results.Ok(new
+    {
+        message= $"period{periodid} begin for user {userId}",
+        periodId=periodid,
+        startTime=DateTime.Now,
+    });
+});
+app.MapPost("/end-session", ([FromBody] int userId) =>
+{
+    //var userIdReq = await req.ReadFromJsonAsync<UserIdReq>();
+    if (userId <= 0)
+    {
+        return Results.BadRequest(new { message = "Invalid user Id" });
+    }
+    Period? endPeriod = parkingManager.EndPresentPeriod(userId);
+    if (endPeriod == null)
+    {
+        return Results.NotFound(new { message = $"There is no current period for this user:{userId}" });
+    }
+    var totalHuors = (endPeriod.EndTime.Value - endPeriod.StartTime).TotalHours;
+    var totalMinutes = (endPeriod.EndTime.Value - endPeriod.StartTime).TotalMinutes;
+    return Results.Ok(new
+    {
+        message = $"the current Period: {endPeriod.PeriodId} is ended now {endPeriod.EndTime} for {userId} ,",
+        cost = endPeriod.PeriodCost,
+        endTime = endPeriod.EndTime,
+        totalHours = totalHuors,
+        totalMinutes = totalMinutes
+    });
+});
+app.MapGet("/current-session/{userid}", (int userid) =>
+{
+    Period? presentPeriod=parkingManager.GetPresentPeriod(userid);
+    if (presentPeriod!=null)
+    {
+        var totalHuors = (DateTime.Now - presentPeriod.StartTime).TotalHours;
+        var totalMinutes = (DateTime.Now - presentPeriod.StartTime).TotalMinutes;
         return Results.Ok(new
         {
-            message = " get user’s all registered details ",
-            fullname = user.FirstName + " " + user.LastName,
-            licenseplate = user.Licenseplate,
-            balance = user.Balance,
-            Periods = periods
+            message = $"the current Period for {userid} is:  {presentPeriod.PeriodId},",
+            totalHours = totalHuors,
+            totalMinutes = totalMinutes,
+            startTime = presentPeriod.StartTime,
+            cost = presentPeriod.PeriodCost,
+            isActive = true
+
         });
-    return Results.NotFound("user not found");
+    }
+    return Results.Ok(new { message = $"There is no current period for this user:{userid}", isActive = false });
 });
-app.MapGet("/previous-sessions", (int userid) => 
+app.MapGet("/previous-sessions/{userid}", (int userid) =>
 {
     List<Period>? previousPeriodes = parkingManager.GetAllPreviousPeriodsForUser(userid);
     if (previousPeriodes != null)
@@ -79,73 +123,32 @@ app.MapGet("/previous-sessions", (int userid) =>
     else return Results.NotFound($"There is no Previous sessions for this user:{userid}");
 
 });
-app.MapPost("/start-session", (UserIdReq userIdReq) =>
-{
-    //var userIdReq = await req.ReadFromJsonAsync<UserIdReq>();
-    if (userIdReq == null || userIdReq.UserId <= 0)
-    {
-        return Results.BadRequest(new { message = "Invalid user Id" });
-    }
-    int periodid=parkingManager.BeginNewPeriod(userIdReq.UserId);
-    return Results.Ok(new
-    {
-        message= $"period{periodid} begin for user {userIdReq.UserId}",
-        periodId=periodid,
-        startTime=DateTime.Now,
-    });
-});
-app.MapGet("/current-session", (int userid) =>
-{
-    Period? presentPeriod=parkingManager.GetPresentPeriod(userid);
-    if (presentPeriod==null)
-    {
-        return Results.NotFound(new {message= $"There is no current period for this user:{userid}",isActive=false });
-    }
-    var totalHuors=(DateTime.Now-presentPeriod.StartTime).TotalHours;
-    var totalMinutes= (DateTime.Now - presentPeriod.StartTime).TotalMinutes;
-    return Results.Ok(new
-    {
-        message= $"the current Period for {userid} is:  {presentPeriod.PeriodId}," ,
-        totalHours=totalHuors,
-        totalMinutes=totalMinutes,
-        startTime=presentPeriod.StartTime,
-        cost=presentPeriod.PeriodCost,
-        isActive=true
-
-    });
-});
-app.MapPost("/end-session",  (UserIdReq userIdReq) =>
-{
-    //var userIdReq = await req.ReadFromJsonAsync<UserIdReq>();
-    if (userIdReq == null || userIdReq.UserId <= 0)
-    {
-        return Results.BadRequest(new { message = "Invalid user Id" });
-    }
-    Period? endPeriod = parkingManager.EndPresentPeriod(userIdReq.UserId);
-    if (endPeriod == null)
-    {
-        return Results.NotFound(new {message= $"There is no current period for this user:{userIdReq.UserId}" });
-    }
-    var totalHuors = (endPeriod.EndTime.Value - endPeriod.StartTime).TotalHours;
-    var totalMinutes = (endPeriod.EndTime.Value - endPeriod.StartTime).TotalMinutes;
-    return Results.Ok(new
-    {
-        message = $"the current Period: {endPeriod.PeriodId} is ended for {userIdReq.UserId} ,",
-        cost=endPeriod.PeriodCost,
-        totalHours = totalHuors,
-        totalMinutes = totalMinutes
-    });
-});
-app.MapGet("/user-balance", (int userid) =>
+app.MapGet("/user-balance/{userid}", (int userid) =>
 {
     decimal totalCost = parkingManager.GetCostForUser(userid);
     if (totalCost == 0)
         return Results.NotFound($"User {userid} doesn't exist or no periods ended .");
     return Results.Ok(new {
         message = $"the cost for user {userid} is {totalCost}" ,
-        balance = totalCost
+        totalBalance = totalCost
     });
 });
+app.MapGet("/user-details", (int userid) =>
+{
+    User? user = parkingManager.GetUserDetails(userid);
+    List<Period>? periods = parkingManager.GetAllPeriodsForUser(userid);
+    if (user != null)
+        return Results.Ok(new
+        {
+            message = " get user’s all registered details ",
+            fullname = user.Firstname + " " + user.Lastname,
+            licenseplate = user.Licenseplate,
+            balance = user.Balance,
+            Periods = periods
+        });
+    return Results.NotFound("user not found");
+});
+
 
 app.MapGet("/", () => "Parking App Swagger Api!");
 
